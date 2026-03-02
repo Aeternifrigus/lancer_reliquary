@@ -1,0 +1,11 @@
+# server
+node_modules/
+dist/
+coverage/
+.env
+
+# client
+build/
+CMakeUserPresets.json
+
+.DS_Store
