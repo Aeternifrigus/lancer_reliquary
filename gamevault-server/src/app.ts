@@ -3,11 +3,15 @@ import express from 'express';
 import { errorHandler } from './middleware/errorHandler';
 import { requestLogger } from './middleware/requestLogger';
 
+import authRouter from './routes/auth';
+
 const app = express();
 
 app.use(express.json({ limit: '10kb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(requestLogger);
+
+app.use('/auth', authRouter);
 
 app.get('/healthz', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', ts: new Date().toISOString() } });
