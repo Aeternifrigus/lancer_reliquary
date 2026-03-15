@@ -5,6 +5,7 @@ import { requestLogger } from './middleware/requestLogger';
 
 import authRouter from './routes/auth';
 import playersRouter from './routes/players';
+import sessionsRouter from './routes/sessions';
 
 const app = express();
 
@@ -14,6 +15,7 @@ app.use(requestLogger);
 
 app.use('/auth', authRouter);
 app.use('/players', playersRouter);
+app.use('/sessions', sessionsRouter);
 
 app.get('/healthz', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', ts: new Date().toISOString() } });
