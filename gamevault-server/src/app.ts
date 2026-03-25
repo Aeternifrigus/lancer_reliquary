@@ -7,6 +7,7 @@ import authRouter from './routes/auth';
 import playersRouter from './routes/players';
 import sessionsRouter from './routes/sessions';
 import leaderboardRouter from './routes/leaderboard';
+import itemsRouter from './routes/items';
 
 const app = express();
 
@@ -18,6 +19,7 @@ app.use('/auth', authRouter);
 app.use('/players', playersRouter);
 app.use('/sessions', sessionsRouter);
 app.use('/leaderboard', leaderboardRouter);
+app.use('/items', itemsRouter);
 
 app.get('/healthz', (_req, res) => {
   res.json({ success: true, data: { status: 'ok', ts: new Date().toISOString() } });
