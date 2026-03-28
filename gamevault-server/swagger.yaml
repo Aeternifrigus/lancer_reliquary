@@ -1,0 +1,446 @@
+openapi: 3.0.3
+info:
+  title: GameVault API
+  description: |
+    REST API for the GameVault game session and leaderboard platform.
+    Handles player registration/auth, game sessions with ELO ranking,
+    a paginated leaderboard, and per-player item inventory.
+  version: 1.0.0
+  contact:
+    name: GameVault
+
+servers:
+  - url: http://localhost:3000
+    description: Local development
+
+tags:
+  - name: auth
+    description: Player registration and login
+  - name: players
+    description: Player profiles and stats
+  - name: sessions
+    description: Game session lifecycle and results
+  - name: leaderboard
+    description: ELO rankings
+  - name: items
+    description: Player inventory
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    ApiResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        message:
+          type: string
+        error:
+          type: string
+
+    PlayerStats:
+      type: object
+      properties:
+        wins:    { type: integer, example: 42 }
+        losses:  { type: integer, example: 18 }
+        draws:   { type: integer, example: 3 }
+        kills:   { type: integer, example: 512 }
+        deaths:  { type: integer, example: 198 }
+        gamesPlayed: { type: integer, example: 63 }
+
+    Player:
+      type: object
+      properties:
+        _id:       { type: string, example: "60d5ec49f1b2c8a4e8f8b123" }
+        username:  { type: string, example: "xSniperPro" }
+        email:     { type: string, example: "sniper@example.com" }
+        elo:       { type: integer, example: 1450 }
+        stats:     { $ref: '#/components/schemas/PlayerStats' }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SessionResult:
+      type: object
+      properties:
+        playerId:  { type: string }
+        kills:     { type: integer }
+        deaths:    { type: integer }
+        assists:   { type: integer }
+        score:     { type: integer }
+        outcome:   { type: string, enum: [WIN, LOSS, DRAW] }
+        eloBefore: { type: integer }
+        eloAfter:  { type: integer }
+        eloChange: { type: integer }
+
+    Session:
+      type: object
+      properties:
+        _id:       { type: string }
+        gameMode:  { type: string, example: "deathmatch" }
+        mapId:     { type: string, example: "map_dust2" }
+        status:    { type: string, enum: [WAITING, ACTIVE, FINISHED, ABANDONED] }
+        players:   { type: array, items: { type: string } }
+        results:   { type: array, items: { $ref: '#/components/schemas/SessionResult' } }
+        startedAt: { type: string, format: date-time }
+        endedAt:   { type: string, format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    LeaderboardEntry:
+      type: object
+      properties:
+        rank:        { type: integer, example: 1 }
+        playerId:    { type: string }
+        username:    { type: string, example: "xSniperPro" }
+        elo:         { type: integer, example: 2100 }
+        wins:        { type: integer, example: 88 }
+        losses:      { type: integer, example: 12 }
+        gamesPlayed: { type: integer, example: 100 }
+        winRate:     { type: number, format: float, example: 0.88 }
+
+    Item:
+      type: object
+      properties:
+        _id:       { type: string }
+        playerId:  { type: string }
+        itemId:    { type: string, example: "ak47_gold" }
+        name:      { type: string, example: "Gold AK-47" }
+        type:      { type: string, enum: [WEAPON, ARMOR, CONSUMABLE, COSMETIC, CURRENCY] }
+        rarity:    { type: string, enum: [COMMON, UNCOMMON, RARE, EPIC, LEGENDARY] }
+        metadata:  { type: object }
+        awardedAt: { type: string, format: date-time }
+
+paths:
+  /auth/register:
+    post:
+      tags: [auth]
+      summary: Register a new player
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, email, password]
+              properties:
+                username: { type: string, minLength: 3, maxLength: 24, example: "xSniperPro" }
+                email:    { type: string, format: email, example: "sniper@example.com" }
+                password: { type: string, minLength: 8, example: "Secur3Pass!" }
+      responses:
+        '201':
+          description: Player created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:  { type: string }
+                          player: { $ref: '#/components/schemas/Player' }
+        '400': { description: Validation error }
+        '409': { description: Username or email already taken }
+
+  /auth/login:
+    post:
+      tags: [auth]
+      summary: Login and receive a JWT
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, example: "xSniperPro" }
+                password: { type: string, example: "Secur3Pass!" }
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          token:  { type: string }
+                          player: { $ref: '#/components/schemas/Player' }
+        '401': { description: Invalid credentials }
+
+  /players/me:
+    get:
+      tags: [players]
+      summary: Get the authenticated player's profile
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Player profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Player' }
+        '401': { description: Not authenticated }
+
+  /players/{id}:
+    get:
+      tags: [players]
+      summary: Get a player's public profile and stats
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+          description: MongoDB ObjectId of the player
+      responses:
+        '200':
+          description: Player profile
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Player' }
+        '400': { description: Invalid ID format }
+        '404': { description: Player not found }
+
+  /sessions:
+    post:
+      tags: [sessions]
+      summary: Create a new game session
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [gameMode, mapId]
+              properties:
+                gameMode:
+                  type: string
+                  enum: [deathmatch, team_deathmatch, capture_the_flag, battle_royale, ranked]
+                  example: deathmatch
+                mapId:
+                  type: string
+                  example: map_dust2
+                playerIds:
+                  type: array
+                  items: { type: string }
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Session' }
+        '400': { description: Validation error }
+        '401': { description: Not authenticated }
+
+  /sessions/{id}/start:
+    patch:
+      tags: [sessions]
+      summary: Transition session from WAITING to ACTIVE
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Session started
+        '400': { description: Session not in WAITING state }
+        '404': { description: Session not found }
+
+  /sessions/{id}/end:
+    patch:
+      tags: [sessions]
+      summary: Submit results and calculate ELO changes
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [results]
+              properties:
+                results:
+                  type: array
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [playerId, kills, deaths, score, outcome]
+                    properties:
+                      playerId: { type: string }
+                      kills:    { type: integer, minimum: 0 }
+                      deaths:   { type: integer, minimum: 0 }
+                      assists:  { type: integer, minimum: 0 }
+                      score:    { type: integer, minimum: 0 }
+                      outcome:  { type: string, enum: [WIN, LOSS, DRAW] }
+      responses:
+        '200':
+          description: Session ended, ELO updated
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Session' }
+        '400': { description: Validation error or invalid session state }
+        '404': { description: Session not found }
+
+  /leaderboard:
+    get:
+      tags: [leaderboard]
+      summary: Get paginated leaderboard
+      parameters:
+        - in: query
+          name: page
+          schema: { type: integer, default: 1 }
+        - in: query
+          name: limit
+          schema: { type: integer, default: 20, maximum: 100 }
+        - in: query
+          name: minElo
+          schema: { type: integer }
+          description: Filter to players at or above this ELO
+      responses:
+        '200':
+          description: Leaderboard entries
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          entries:    { type: array, items: { $ref: '#/components/schemas/LeaderboardEntry' } }
+                          total:      { type: integer }
+                          page:       { type: integer }
+                          limit:      { type: integer }
+                          totalPages: { type: integer }
+
+  /leaderboard/{playerId}:
+    get:
+      tags: [leaderboard]
+      summary: Get a specific player's current rank
+      parameters:
+        - in: path
+          name: playerId
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Player rank
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          rank:  { type: integer }
+                          entry: { $ref: '#/components/schemas/LeaderboardEntry' }
+        '404': { description: Player not found }
+
+  /items/{playerId}:
+    post:
+      tags: [items]
+      summary: Award an item to a player
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - in: path
+          name: playerId
+          required: true
+          schema: { type: string }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [itemId, name, type, rarity]
+              properties:
+                itemId:   { type: string, example: "ak47_gold" }
+                name:     { type: string, example: "Gold AK-47" }
+                type:     { type: string, enum: [WEAPON, ARMOR, CONSUMABLE, COSMETIC, CURRENCY] }
+                rarity:   { type: string, enum: [COMMON, UNCOMMON, RARE, EPIC, LEGENDARY] }
+                metadata: { type: object }
+      responses:
+        '201':
+          description: Item awarded
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data: { $ref: '#/components/schemas/Item' }
+        '409': { description: Player already has this item }
+
+    get:
+      tags: [items]
+      summary: Get a player's inventory
+      parameters:
+        - in: path
+          name: playerId
+          required: true
+          schema: { type: string }
+        - in: query
+          name: type
+          schema: { type: string, enum: [WEAPON, ARMOR, CONSUMABLE, COSMETIC, CURRENCY] }
+        - in: query
+          name: rarity
+          schema: { type: string, enum: [COMMON, UNCOMMON, RARE, EPIC, LEGENDARY] }
+      responses:
+        '200':
+          description: Player inventory
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          items: { type: array, items: { $ref: '#/components/schemas/Item' } }
+                          count: { type: integer }
