@@ -1,0 +1,250 @@
+{
+  "info": {
+    "name": "GameVault API",
+    "description": "Complete request collection for the GameVault REST API.\n\nWorkflow:\n1. Run 'Register Player' to create an account\n2. Copy the `token` from the response into the collection variable `{{token}}`\n3. All authenticated requests will pick it up automatically.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "gamevault-api-v1"
+  },
+  "variable": [
+    { "key": "baseUrl",   "value": "http://localhost:3000", "type": "string" },
+    { "key": "token",     "value": "",                      "type": "string" },
+    { "key": "playerId",  "value": "",                      "type": "string" },
+    { "key": "sessionId", "value": "",                      "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register Player",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) {",
+                  "  pm.collectionVariables.set('token',    json.data.token);",
+                  "  pm.collectionVariables.set('playerId', json.data.player.id);",
+                  "  console.log('Token and playerId saved to collection variables');",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"xSniperPro\",\n  \"email\": \"sniper@example.com\",\n  \"password\": \"Secur3Pass!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/register", "host": ["{{baseUrl}}"], "path": ["auth", "register"] }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) {",
+                  "  pm.collectionVariables.set('token',    json.data.token);",
+                  "  pm.collectionVariables.set('playerId', json.data.player.id);",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"xSniperPro\",\n  \"password\": \"Secur3Pass!\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/auth/login", "host": ["{{baseUrl}}"], "path": ["auth", "login"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Players",
+      "item": [
+        {
+          "name": "Get My Profile",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/players/me", "host": ["{{baseUrl}}"], "path": ["players", "me"] }
+          }
+        },
+        {
+          "name": "Get Player by ID",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/players/{{playerId}}", "host": ["{{baseUrl}}"], "path": ["players", "{{playerId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Sessions",
+      "item": [
+        {
+          "name": "Create Session",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "const json = pm.response.json();",
+                  "if (json.success) pm.collectionVariables.set('sessionId', json.data._id);"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"gameMode\": \"deathmatch\",\n  \"mapId\": \"map_dust2\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/sessions", "host": ["{{baseUrl}}"], "path": ["sessions"] }
+          }
+        },
+        {
+          "name": "Start Session",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/start", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "start"] }
+          }
+        },
+        {
+          "name": "End Session",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"results\": [\n    {\n      \"playerId\": \"{{playerId}}\",\n      \"kills\": 22,\n      \"deaths\": 5,\n      \"assists\": 3,\n      \"score\": 5500,\n      \"outcome\": \"WIN\"\n    }\n  ]\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}/end", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}", "end"] }
+          }
+        },
+        {
+          "name": "Get Session",
+          "request": {
+            "method": "GET",
+            "header": [{ "key": "Authorization", "value": "Bearer {{token}}" }],
+            "url": { "raw": "{{baseUrl}}/sessions/{{sessionId}}", "host": ["{{baseUrl}}"], "path": ["sessions", "{{sessionId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Leaderboard",
+      "item": [
+        {
+          "name": "Get Leaderboard (page 1)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard?page=1&limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaderboard"],
+              "query": [
+                { "key": "page",  "value": "1" },
+                { "key": "limit", "value": "20" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Leaderboard (filtered by ELO)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/leaderboard?minElo=1500",
+              "host": ["{{baseUrl}}"],
+              "path": ["leaderboard"],
+              "query": [{ "key": "minElo", "value": "1500" }]
+            }
+          }
+        },
+        {
+          "name": "Get Player Rank",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/leaderboard/{{playerId}}", "host": ["{{baseUrl}}"], "path": ["leaderboard", "{{playerId}}"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Items",
+      "item": [
+        {
+          "name": "Award Item",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type",  "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"itemId\": \"ak47_gold\",\n  \"name\": \"Gold AK-47\",\n  \"type\": \"WEAPON\",\n  \"rarity\": \"LEGENDARY\"\n}"
+            },
+            "url": { "raw": "{{baseUrl}}/items/{{playerId}}", "host": ["{{baseUrl}}"], "path": ["items", "{{playerId}}"] }
+          }
+        },
+        {
+          "name": "Get Inventory",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/items/{{playerId}}", "host": ["{{baseUrl}}"], "path": ["items", "{{playerId}}"] }
+          }
+        },
+        {
+          "name": "Get Inventory (weapons only)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/items/{{playerId}}?type=WEAPON",
+              "host": ["{{baseUrl}}"],
+              "path": ["items", "{{playerId}}"],
+              "query": [{ "key": "type", "value": "WEAPON" }]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/healthz", "host": ["{{baseUrl}}"], "path": ["healthz"] }
+          }
+        }
+      ]
+    }
+  ]
+}
