@@ -1,0 +1,11 @@
+[requires]
+libcurl/8.6.0
+nlohmann_json/3.11.3
+
+[generators]
+CMakeDeps
+CMakeToolchain
+
+[options]
+libcurl*:shared=False
+libcurl*:with_ssl=True
