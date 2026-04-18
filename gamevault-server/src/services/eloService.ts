@@ -49,11 +49,20 @@ export function calculateSessionElo(
     outcome: GameOutcome;
   }>
 ): Array<{ playerId: string; eloBefore: number; eloAfter: number; eloChange: number }> {
+  // nobody to be rated against
+  if (participants.length < 2) {
+    return participants.map((p) => ({
+      playerId: p.playerId,
+      eloBefore: p.elo,
+      eloAfter: p.elo,
+      eloChange: 0,
+    }));
+  }
+
   const totalElo = participants.reduce((sum, p) => sum + p.elo, 0);
 
   return participants.map((p) => {
-    const opponentAvg =
-      participants.length > 1 ? (totalElo - p.elo) / (participants.length - 1) : p.elo;
+    const opponentAvg = (totalElo - p.elo) / (participants.length - 1);
 
     const { newElo, change } = calculateElo(p.elo, opponentAvg, p.outcome, p.gamesPlayed);
 

@@ -65,4 +65,12 @@ describe('calculateSessionElo', () => {
     expect(winner.eloAfter).toBe(winner.eloBefore + winner.eloChange);
     expect(loser.eloAfter).toBe(loser.eloBefore + loser.eloChange);
   });
+
+  it('handles a single-player session gracefully', () => {
+    const results = calculateSessionElo([
+      { playerId: 'solo', elo: 1400, gamesPlayed: 20, outcome: 'WIN' },
+    ]);
+    expect(results).toHaveLength(1);
+    expect(results[0].eloChange).toBe(0);
+  });
 });

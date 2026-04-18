@@ -55,7 +55,13 @@ describe('PATCH /sessions/:id/end', () => {
   beforeEach(() => setup());
 
   it('ends a session and updates player ELO', async () => {
-    // Create session
+    const opponent = await request(app).post('/auth/register').send({
+      username: 'opponent',
+      email: 'opponent@example.com',
+      password: 'Pass12345',
+    });
+    const opponentId = opponent.body.data.player.id as string;
+
     const createRes = await request(app)
       .post('/sessions')
       .set('Authorization', `Bearer ${token}`)
@@ -63,31 +69,27 @@ describe('PATCH /sessions/:id/end', () => {
 
     const sessionId = createRes.body.data._id as string;
 
-    // End session with results
     const endRes = await request(app)
       .patch(`/sessions/${sessionId}/end`)
       .set('Authorization', `Bearer ${token}`)
       .send({
         results: [
-          {
-            playerId,
-            kills: 15,
-            deaths: 4,
-            assists: 2,
-            score: 3500,
-            outcome: 'WIN',
-          },
+          { playerId, kills: 15, deaths: 4, assists: 2, score: 3500, outcome: 'WIN' },
+          { playerId: opponentId, kills: 4, deaths: 15, score: 900, outcome: 'LOSS' },
         ],
       });
 
     expect(endRes.status).toBe(200);
     expect(endRes.body.data.status).toBe('FINISHED');
-    expect(endRes.body.data.results[0].eloChange).toBeDefined();
+    expect(endRes.body.data.results).toHaveLength(2);
 
-    // Player ELO should have changed
-    const playerRes = await request(app).get(`/players/${playerId}`);
-    expect(playerRes.body.data.elo).not.toBe(1200);
-    expect(playerRes.body.data.stats.wins).toBe(1);
-    expect(playerRes.body.data.stats.kills).toBe(15);
+    const winner = await request(app).get(`/players/${playerId}`);
+    expect(winner.body.data.elo).toBeGreaterThan(1200);
+    expect(winner.body.data.stats.wins).toBe(1);
+    expect(winner.body.data.stats.kills).toBe(15);
+
+    const loser = await request(app).get(`/players/${opponentId}`);
+    expect(loser.body.data.elo).toBeLessThan(1200);
+    expect(loser.body.data.stats.losses).toBe(1);
   });
 });
