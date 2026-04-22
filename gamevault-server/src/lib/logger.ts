@@ -6,6 +6,7 @@ function emit(level: Level, message: string, meta?: Record<string, unknown>) {
   if (level === 'error' || level === 'warn') {
     console.error(line);
   } else if (process.env.NODE_ENV !== 'test') {
+    // eslint-disable-next-line no-console
     console.log(line);
   }
 }
