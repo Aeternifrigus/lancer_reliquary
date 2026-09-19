@@ -57,6 +57,8 @@ export interface ISession {
   gameMode: string;
   mapId: string;
   status: SessionStatus;
+  // The player who created the session. Only they may start or end it.
+  createdBy: Types.ObjectId;
   players: Types.ObjectId[];
   results: SessionPlayerResult[];
   startedAt?: Date;

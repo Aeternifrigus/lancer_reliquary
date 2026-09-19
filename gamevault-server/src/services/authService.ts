@@ -7,6 +7,12 @@ import { createError } from '../middleware/errorHandler';
 
 const SALT_ROUNDS = 12;
 
+// A real hash at the same cost factor. Comparing against it for unknown
+// usernames makes a failed login take as long as a wrong password, so response
+// times do not reveal which usernames exist. It has to be a valid bcrypt hash:
+// bcryptjs returns false immediately for a malformed one.
+const DUMMY_HASH = bcrypt.hashSync('gamevault-timing-equaliser', SALT_ROUNDS);
+
 export interface RegisterDto {
   username: string;
   email: string;
@@ -50,7 +56,7 @@ export async function loginPlayer(dto: LoginDto): Promise<AuthResult> {
 
   if (!player) {
     // still run bcrypt so the response time doesn't leak whether the user exists
-    await bcrypt.compare(dto.password, '$2b$12$invalidhashpaddingthatisnotreal..');
+    await bcrypt.compare(dto.password, DUMMY_HASH);
     throw createError('Invalid username or password', 401);
   }
 

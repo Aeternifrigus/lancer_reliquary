@@ -114,6 +114,11 @@ int main(int argc, char* argv[]) {
         std::cout << "Session created: " << session.id
                   << " [" << session.status << "]\n";
 
+        // Only the host (api1, who created it) can start and end the session
+        auto started = api1.startSession(session.id);
+        std::cout << "Session started: " << started.id
+                  << " [" << started.status << "]\n";
+
         // Submit results: api1's player wins
         std::vector<EndSessionEntry> results = {
             {auth1.player.id, 22, 5, 3, 5500, "WIN"},

@@ -52,32 +52,51 @@ describe('POST /sessions', () => {
 });
 
 describe('PATCH /sessions/:id/end', () => {
-  beforeEach(() => setup());
+  let opponentToken: string;
+  let opponentId: string;
 
-  it('ends a session and updates player ELO', async () => {
+  beforeEach(async () => {
+    await setup();
     const opponent = await request(app).post('/auth/register').send({
       username: 'opponent',
       email: 'opponent@example.com',
       password: 'Pass12345',
     });
-    const opponentId = opponent.body.data.player.id as string;
+    opponentToken = opponent.body.data.token as string;
+    opponentId = opponent.body.data.player.id as string;
+  });
 
+  // Creates a session hosted by the first player, with the opponent in it.
+  async function activeSession(): Promise<string> {
     const createRes = await request(app)
       .post('/sessions')
       .set('Authorization', `Bearer ${token}`)
-      .send({ gameMode: 'ranked', mapId: 'arena_01' });
-
+      .send({ gameMode: 'ranked', mapId: 'arena_01', playerIds: [opponentId] });
     const sessionId = createRes.body.data._id as string;
+
+    await request(app)
+      .patch(`/sessions/${sessionId}/start`)
+      .set('Authorization', `Bearer ${token}`)
+      .expect(200);
+    return sessionId;
+  }
+
+  function results(winner = playerId, loser = opponentId) {
+    return {
+      results: [
+        { playerId: winner, kills: 15, deaths: 4, assists: 2, score: 3500, outcome: 'WIN' },
+        { playerId: loser, kills: 4, deaths: 15, score: 900, outcome: 'LOSS' },
+      ],
+    };
+  }
+
+  it('ends a session and updates player ELO', async () => {
+    const sessionId = await activeSession();
 
     const endRes = await request(app)
       .patch(`/sessions/${sessionId}/end`)
       .set('Authorization', `Bearer ${token}`)
-      .send({
-        results: [
-          { playerId, kills: 15, deaths: 4, assists: 2, score: 3500, outcome: 'WIN' },
-          { playerId: opponentId, kills: 4, deaths: 15, score: 900, outcome: 'LOSS' },
-        ],
-      });
+      .send(results());
 
     expect(endRes.status).toBe(200);
     expect(endRes.body.data.status).toBe('FINISHED');
@@ -91,5 +110,103 @@ describe('PATCH /sessions/:id/end', () => {
     const loser = await request(app).get(`/players/${opponentId}`);
     expect(loser.body.data.elo).toBeLessThan(1200);
     expect(loser.body.data.stats.losses).toBe(1);
+  });
+
+  it('adds the creator to the session automatically', async () => {
+    const createRes = await request(app)
+      .post('/sessions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ gameMode: 'ranked', mapId: 'arena_01', playerIds: [opponentId] });
+
+    expect(createRes.body.data.players).toEqual(expect.arrayContaining([playerId, opponentId]));
+    expect(createRes.body.data.createdBy).toBe(playerId);
+  });
+
+  it('rejects an end request from a player who is not the host', async () => {
+    const sessionId = await activeSession();
+
+    const res = await request(app)
+      .patch(`/sessions/${sessionId}/end`)
+      .set('Authorization', `Bearer ${opponentToken}`)
+      .send(results(opponentId, playerId));
+
+    expect(res.status).toBe(403);
+    const opponent = await request(app).get(`/players/${opponentId}`);
+    expect(opponent.body.data.elo).toBe(1200);
+  });
+
+  it('rejects results for a player who was not in the session', async () => {
+    const outsider = await request(app).post('/auth/register').send({
+      username: 'outsider',
+      email: 'outsider@example.com',
+      password: 'Pass12345',
+    });
+    const outsiderId = outsider.body.data.player.id as string;
+    const sessionId = await activeSession();
+
+    const res = await request(app)
+      .patch(`/sessions/${sessionId}/end`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(results(playerId, outsiderId));
+
+    expect(res.status).toBe(400);
+    const player = await request(app).get(`/players/${outsiderId}`);
+    expect(player.body.data.elo).toBe(1200);
+  });
+
+  it('rejects results that leave out a player', async () => {
+    const sessionId = await activeSession();
+
+    const res = await request(app)
+      .patch(`/sessions/${sessionId}/end`)
+      .set('Authorization', `Bearer ${token}`)
+      .send({ results: [results().results[0]] });
+
+    expect(res.status).toBe(400);
+  });
+
+  it('rejects the same player twice in the results', async () => {
+    const sessionId = await activeSession();
+
+    const res = await request(app)
+      .patch(`/sessions/${sessionId}/end`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(results(playerId, playerId));
+
+    expect(res.status).toBe(400);
+  });
+
+  it('refuses to end a session that was never started', async () => {
+    const createRes = await request(app)
+      .post('/sessions')
+      .set('Authorization', `Bearer ${token}`)
+      .send({ gameMode: 'ranked', mapId: 'arena_01', playerIds: [opponentId] });
+
+    const res = await request(app)
+      .patch(`/sessions/${createRes.body.data._id}/end`)
+      .set('Authorization', `Bearer ${token}`)
+      .send(results());
+
+    expect(res.status).toBe(400);
+  });
+
+  it('applies ELO only once when two end requests race', async () => {
+    const sessionId = await activeSession();
+
+    const [a, b] = await Promise.all([
+      request(app)
+        .patch(`/sessions/${sessionId}/end`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(results()),
+      request(app)
+        .patch(`/sessions/${sessionId}/end`)
+        .set('Authorization', `Bearer ${token}`)
+        .send(results()),
+    ]);
+
+    expect([a.status, b.status].sort()).toEqual([200, 409]);
+    const winner = await request(app).get(`/players/${playerId}`);
+    expect(winner.body.data.stats.gamesPlayed).toBe(1);
+    expect(winner.body.data.stats.wins).toBe(1);
   });
 });

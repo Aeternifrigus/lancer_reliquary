@@ -84,6 +84,7 @@ components:
         gameMode:  { type: string, example: "deathmatch" }
         mapId:     { type: string, example: "map_dust2" }
         status:    { type: string, enum: [WAITING, ACTIVE, FINISHED, ABANDONED] }
+        createdBy: { type: string, description: "Player who created the session. Only they can start or end it." }
         players:   { type: array, items: { type: string } }
         results:   { type: array, items: { $ref: '#/components/schemas/SessionResult' } }
         startedAt: { type: string, format: date-time }
@@ -243,6 +244,7 @@ paths:
                   example: map_dust2
                 playerIds:
                   type: array
+                  description: Other players in the session. The creator is always added.
                   items: { type: string }
       responses:
         '201':
@@ -272,12 +274,16 @@ paths:
         '200':
           description: Session started
         '400': { description: Session not in WAITING state }
+        '403': { description: Caller did not create this session }
         '404': { description: Session not found }
 
   /sessions/{id}/end:
     patch:
       tags: [sessions]
       summary: Submit results and calculate ELO changes
+      description: >
+        Only the session's creator can call this, and only while the session is ACTIVE.
+        Results must list every player in the session exactly once.
       security: [{ bearerAuth: [] }]
       parameters:
         - in: path
@@ -316,8 +322,10 @@ paths:
                   - type: object
                     properties:
                       data: { $ref: '#/components/schemas/Session' }
-        '400': { description: Validation error or invalid session state }
+        '400': { description: Validation error, invalid session state, or results that do not match the session's players }
+        '403': { description: Caller did not create this session }
         '404': { description: Session not found }
+        '409': { description: Session was already ended by another request }
 
   /leaderboard:
     get:

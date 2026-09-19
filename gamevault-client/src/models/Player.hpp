@@ -33,10 +33,16 @@ inline void from_json(const nlohmann::json& j, PlayerStats& s) {
 }
 
 inline void from_json(const nlohmann::json& j, Player& p) {
-    j.at("_id").get_to(p.id);
+    // Full player documents use "_id"; the /auth responses use "id" and
+    // leave out stats, so accept both shapes.
+    if (j.contains("_id")) {
+        j.at("_id").get_to(p.id);
+    } else {
+        j.at("id").get_to(p.id);
+    }
     j.at("username").get_to(p.username);
     if (j.contains("email")) j.at("email").get_to(p.email);
     j.at("elo").get_to(p.elo);
-    j.at("stats").get_to(p.stats);
+    if (j.contains("stats")) j.at("stats").get_to(p.stats);
     if (j.contains("createdAt")) j.at("createdAt").get_to(p.createdAt);
 }

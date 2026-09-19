@@ -1,4 +1,5 @@
 import request from 'supertest';
+import bcrypt from 'bcryptjs';
 import app from '../src/app';
 import { connectTestDb, clearCollections, disconnectTestDb } from './setup/db';
 
@@ -91,5 +92,21 @@ describe('POST /auth/login', () => {
     });
 
     expect(res.status).toBe(401);
+  });
+});
+
+describe('login timing', () => {
+  afterEach(() => jest.restoreAllMocks());
+
+  it('compares unknown usernames against a real bcrypt hash', async () => {
+    const compare = jest.spyOn(bcrypt, 'compare');
+
+    await request(app).post('/auth/login').send({ username: 'ghost', password: 'irrelevant' });
+
+    expect(compare).toHaveBeenCalledTimes(1);
+    const hash = compare.mock.calls[0][1];
+    // A malformed hash makes bcryptjs return at once, which reveals that the
+    // username does not exist. It must be a well-formed cost-12 hash.
+    expect(hash).toMatch(/^\$2[aby]\$12\$[./A-Za-z0-9]{53}$/);
   });
 });

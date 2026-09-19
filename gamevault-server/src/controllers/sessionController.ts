@@ -2,6 +2,14 @@ import { Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { AuthRequest } from '../types';
 import { createSession, endSession, getSession, startSession } from '../services/sessionService';
+import { createError } from '../middleware/errorHandler';
+
+// authenticate() runs on every session route, so this only fails if the
+// router is misconfigured.
+function requesterId(req: AuthRequest): string {
+  if (!req.player) throw createError('Not authenticated', 401);
+  return req.player.playerId;
+}
 
 const CreateSessionSchema = z.object({
   gameMode: z.enum([
@@ -36,7 +44,7 @@ export async function handleCreateSession(
   next: NextFunction
 ): Promise<void> {
   try {
-    const session = await createSession(CreateSessionSchema.parse(req.body));
+    const session = await createSession(CreateSessionSchema.parse(req.body), requesterId(req));
     res.status(201).json({ success: true, data: session, message: 'Session created' });
   } catch (err) {
     next(err);
@@ -49,7 +57,7 @@ export async function handleStartSession(
   next: NextFunction
 ): Promise<void> {
   try {
-    const session = await startSession(req.params.id);
+    const session = await startSession(req.params.id, requesterId(req));
     res.json({ success: true, data: session });
   } catch (err) {
     next(err);
@@ -62,7 +70,11 @@ export async function handleEndSession(
   next: NextFunction
 ): Promise<void> {
   try {
-    const session = await endSession(req.params.id, EndSessionSchema.parse(req.body));
+    const session = await endSession(
+      req.params.id,
+      EndSessionSchema.parse(req.body),
+      requesterId(req)
+    );
     res.json({ success: true, data: session, message: 'Session ended, ELO updated' });
   } catch (err) {
     next(err);

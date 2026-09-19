@@ -1,6 +1,7 @@
 #include "HttpClient.hpp"
 
 #include <curl/curl.h>
+#include <memory>
 #include <stdexcept>
 #include <sstream>
 
@@ -11,6 +12,36 @@ static size_t writeCallback(char* ptr, size_t size, size_t nmemb, void* userdata
     buf->append(ptr, size * nmemb);
     return size * nmemb;
 }
+
+// ─── RAII owners for libcurl resources ─────────────────────────────────────────
+// Each is freed when it goes out of scope, on every return path and when an
+// exception is thrown, so no code path can leak a handle.
+
+namespace {
+
+struct CurlEasyDeleter {
+    void operator()(CURL* handle) const noexcept { curl_easy_cleanup(handle); }
+};
+
+struct CurlSlistDeleter {
+    void operator()(curl_slist* list) const noexcept { curl_slist_free_all(list); }
+};
+
+using CurlHandle = std::unique_ptr<CURL, CurlEasyDeleter>;
+using CurlHeaders = std::unique_ptr<curl_slist, CurlSlistDeleter>;
+
+// curl_slist_append returns NULL on failure and leaves the old list alone, so
+// the owner must only be re-seated on success.
+void appendHeader(CurlHeaders& headers, const std::string& header) {
+    curl_slist* updated = curl_slist_append(headers.get(), header.c_str());
+    if (!updated) {
+        throw std::runtime_error("Failed to allocate HTTP header");
+    }
+    headers.release();
+    headers.reset(updated);
+}
+
+} // namespace
 
 // ─── HttpClient implementation ─────────────────────────────────────────────────
 
@@ -49,10 +80,11 @@ std::string HttpClient::request(
     const std::string& path,
     const std::string& body
 ) const {
-    CURL* curl = curl_easy_init();
-    if (!curl) {
+    CurlHandle handle(curl_easy_init());
+    if (!handle) {
         throw std::runtime_error("Failed to initialise libcurl handle");
     }
+    CURL* curl = handle.get();
 
     std::string responseBody;
     std::string url = m_baseUrl + path;
@@ -64,16 +96,15 @@ std::string HttpClient::request(
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
     // Build request headers
-    curl_slist* headers = nullptr;
-    headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, "Accept: application/json");
+    CurlHeaders headers;
+    appendHeader(headers, "Content-Type: application/json");
+    appendHeader(headers, "Accept: application/json");
 
     if (m_authToken.has_value()) {
-        std::string authHeader = "Authorization: Bearer " + m_authToken.value();
-        headers = curl_slist_append(headers, authHeader.c_str());
+        appendHeader(headers, "Authorization: Bearer " + m_authToken.value());
     }
 
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers.get());
 
     // Set method and body
     if (method == "POST") {
@@ -88,20 +119,12 @@ std::string HttpClient::request(
     // GET is the default
 
     CURLcode res = curl_easy_perform(curl);
-
     if (res != CURLE_OK) {
-        std::string errMsg = "HTTP request failed: ";
-        errMsg += curl_easy_strerror(res);
-        curl_slist_free_all(headers);
-        curl_easy_cleanup(curl);
-        throw std::runtime_error(errMsg);
+        throw std::runtime_error(std::string("HTTP request failed: ") + curl_easy_strerror(res));
     }
 
     long httpCode = 0;
     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &httpCode);
-
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
 
     // 4xx and 5xx become exceptions; the message includes the response body
     if (httpCode >= 400) {

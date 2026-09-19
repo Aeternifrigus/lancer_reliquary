@@ -32,6 +32,7 @@ const SessionSchema = new Schema<SessionDocument>(
       enum: ['WAITING', 'ACTIVE', 'FINISHED', 'ABANDONED'] satisfies SessionStatus[],
       default: 'WAITING',
     },
+    createdBy: { type: Schema.Types.ObjectId, ref: 'Player', required: true },
     players: [{ type: Schema.Types.ObjectId, ref: 'Player' }],
     results: [ResultSchema],
     startedAt: { type: Date },

@@ -22,9 +22,21 @@ export const config = {
   },
 } as const;
 
-if (config.nodeEnv === 'production') {
-  if (!process.env.JWT_SECRET) throw new Error('JWT_SECRET must be set in production');
-  if (!process.env.MONGODB_URI) throw new Error('MONGODB_URI must be set in production');
+// The built-in fallbacks are only safe on a developer machine or in tests.
+// Anything else (production, staging, or NODE_ENV forgotten entirely) must
+// supply real values, otherwise tokens would be signed with a public secret.
+const LOCAL_ENVS = ['development', 'test'];
+
+if (!LOCAL_ENVS.includes(config.nodeEnv)) {
+  if (!process.env.JWT_SECRET) {
+    throw new Error(`JWT_SECRET must be set when NODE_ENV is "${config.nodeEnv}"`);
+  }
+  if (process.env.JWT_SECRET.length < 32) {
+    throw new Error('JWT_SECRET must be at least 32 characters');
+  }
+  if (!process.env.MONGODB_URI) {
+    throw new Error(`MONGODB_URI must be set when NODE_ENV is "${config.nodeEnv}"`);
+  }
 }
 
 export default config;
